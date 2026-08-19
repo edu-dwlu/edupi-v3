@@ -9,9 +9,15 @@ export default async function handler(req, res) {
 
   try {
     const upstreamResponse = await fetch(endpoint, {
+      method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json, text/plain, */*'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': `https://play.edustream.qzz.io/player/api/${id1}/${id2}/${id3}/marco-player`,
+        'Origin': 'https://play.edustream.qzz.io',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin'
       }
     });
 
@@ -23,7 +29,6 @@ export default async function handler(req, res) {
 
     const data = await upstreamResponse.json();
 
-    // Cache the signed URL response at the edge for 5 minutes
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60');
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.status(200).json(data);
