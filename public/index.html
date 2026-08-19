@@ -5,62 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stream Player</title>
 
-  <!-- Shaka Player UI compiled library and CSS -->
+  <!-- Shaka Player UI -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.ui.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/controls.min.css">
 
   <style>
     * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background-color: #000;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    .player-wrapper {
-      position: relative;
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    video {
-      width: 100%;
-      height: 100%;
-      background-color: #000;
-      outline: none;
-    }
-    #status-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.85);
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      transition: opacity 0.3s ease;
-    }
-    .spinner {
-      width: 42px;
-      height: 42px;
-      border: 3px solid rgba(255, 255, 255, 0.2);
-      border-top-color: #3b82f6;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-bottom: 16px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background-color: #000; overflow: hidden; }
+    .player-wrapper { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+    video { width: 100%; height: 100%; background-color: #000; outline: none; }
+    #status-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; transition: opacity 0.3s ease; }
+    .spinner { width: 42px; height: 42px; border: 3px solid rgba(255, 255, 255, 0.2); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -75,20 +31,14 @@
   </div>
 
   <script>
-    // Extract IDs directly from the URL path
     const pathMatch = window.location.pathname.match(/\/watch\/([^\/]+)\/([^\/]+)\/([^\/]+)/);
-    
     let id1, id2, id3;
     
     if (pathMatch) {
-      id1 = pathMatch[1];
-      id2 = pathMatch[2];
-      id3 = pathMatch[3];
+      id1 = pathMatch[1]; id2 = pathMatch[2]; id3 = pathMatch[3];
     } else {
       const urlParams = new URLSearchParams(window.location.search);
-      id1 = urlParams.get('id1');
-      id2 = urlParams.get('id2');
-      id3 = urlParams.get('id3');
+      id1 = urlParams.get('id1'); id2 = urlParams.get('id2'); id3 = urlParams.get('id3');
     }
 
     const overlay = document.getElementById('status-overlay');
@@ -103,69 +53,56 @@
     }
 
     async function initPlayer() {
-      if (!id1 || !id2 || !id3) {
-        showError('Invalid URL parameters: id1, id2, and id3 are required.');
-        return;
-      }
+      if (!id1 || !id2 || !id3) return showError('Invalid URL parameters.');
 
       shaka.polyfill.installAll();
-
-      if (!shaka.Player.isBrowserSupported()) {
-        showError('Browser not supported for DRM video playback.');
-        return;
-      }
+      if (!shaka.Player.isBrowserSupported()) return showError('Browser not supported.');
 
       const video = document.getElementById('video');
       const player = new shaka.Player(video);
 
-      // Listen for errors
+      // --- THE CORS BYPASS FILTER ---
+      // Intercepts direct CDN requests and forces them through the Vercel Edge Proxy
+      player.getNetworkingEngine().registerRequestFilter(function(type, request) {
+        if (request.uris[0].includes('p01--streamthorr--fttnk8y47n9c.code.run')) {
+          const originalUrl = new URL(request.uris[0]);
+          // Rewrite URL to use our Vercel reverse proxy
+          request.uris[0] = '/video-proxy' + originalUrl.pathname + originalUrl.search;
+        }
+      });
+      // ------------------------------
+
       player.addEventListener('error', (event) => {
-        console.error('Shaka Player Error:', event.detail);
-        showError(`Playback error Code ${event.detail.code}: ${event.detail.message || 'Network request failed'}`);
+        showError(`Playback error Code ${event.detail.code}: ${event.detail.message}`);
       });
 
       try {
         statusText.textContent = 'Fetching stream keys...';
-        
         const response = await fetch(`/api/stream/${id1}/${id2}/${id3}`);
-        
-        if (!response.ok) {
-          throw new Error(`API returned HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`API returned HTTP ${response.status}`);
 
         const jsonResponse = await response.json();
         const apiData = jsonResponse.data;
+        if (!apiData) throw new Error('Missing "data" object.');
 
-        if (!apiData) {
-          throw new Error('Unexpected API response format: Missing "data" object.');
-        }
-
-        const streamUrl = apiData.manifest_url || apiData.hls_url;
+        let streamUrl = apiData.manifest_url || apiData.hls_url;
         const kid = apiData.kid;
         const key = apiData.key;
 
-        if (!streamUrl) {
-          throw new Error('No stream URL provided in the API response.');
-        }
+        if (!streamUrl) throw new Error('No stream URL provided.');
 
-        // Configure ClearKey DRM
+        // Initial rewrite of the manifest URL so Shaka loads it via Vercel
+        streamUrl = streamUrl.replace('https://p01--streamthorr--fttnk8y47n9c.code.run', '/video-proxy');
+
         if (kid && key) {
-          player.configure({
-            drm: {
-              clearKeys: {
-                [kid]: key
-              }
-            }
-          });
+          player.configure({ drm: { clearKeys: { [kid]: key } } });
         }
 
         statusText.textContent = 'Loading video...';
         await player.load(streamUrl);
-        
         overlay.classList.add('hidden');
 
       } catch (err) {
-        console.error('Initialization failed:', err);
         showError(err.message || 'Failed to initialize player');
       }
     }
