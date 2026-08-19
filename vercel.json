@@ -7,6 +7,10 @@
     {
       "source": "/api/stream/:id1/:id2/:id3",
       "destination": "https://play.edustream.qzz.io/api/public/s/y124xkpxpvrg6t96f2yq0qxly26h574lr648rrd7njsf36pfyzy99ysvq38z2g38rndb/api/v2/get-signedurl/:id1/:id2/:id3"
+    },
+    {
+      "source": "/video-proxy/:path*",
+      "destination": "https://p01--streamthorr--fttnk8y47n9c.code.run/:path*"
     }
   ]
 }
