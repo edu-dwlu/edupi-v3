@@ -118,15 +118,26 @@
       const video = document.getElementById('video');
       const player = new shaka.Player(video);
 
+      // --- CORS / NETWORK REQUEST BYPASS FILTER ---
+      // This hooks into Shaka's networking engine to inject headers into every video chunk request
+      const networkingEngine = player.getNetworkingEngine();
+      if (networkingEngine) {
+        networkingEngine.registerRequestFilter(function(type, request) {
+          // Force proper headers on media segments and manifests to bypass CORS blocks
+          request.headers['Origin'] = 'https://play.edustream.qzz.io';
+          request.headers['Referer'] = 'https://play.edustream.qzz.io/';
+        });
+      }
+      // -------------------------------------------
+
       player.addEventListener('error', (event) => {
         console.error('Shaka Player Error:', event.detail);
-        showError(`Playback error: ${event.detail.message || 'Unable to decode stream'}`);
+        showError(`Playback error Code ${event.detail.code}: ${event.detail.message || 'Network request failed'}`);
       });
 
       try {
         statusText.textContent = 'Fetching stream keys...';
         
-        // Fetch the JSON via our Vercel Edge Proxy
         const response = await fetch(`/api/stream/${id1}/${id2}/${id3}`);
         
         if (!response.ok) {
@@ -134,20 +145,15 @@
         }
 
         const jsonResponse = await response.json();
-
-        // --- NEW JSON PARSING LOGIC ---
-        // Look inside the nested "data" object returned by the API
         const apiData = jsonResponse.data;
 
         if (!apiData) {
           throw new Error('Unexpected API response format: Missing "data" object.');
         }
 
-        // Prioritize DASH (.mpd) for DRM, fallback to HLS (.m3u8)
         const streamUrl = apiData.manifest_url || apiData.hls_url;
         const kid = apiData.kid;
         const key = apiData.key;
-        // ------------------------------
 
         if (!streamUrl) {
           throw new Error('No stream URL provided in the API response.');
@@ -167,7 +173,6 @@
         statusText.textContent = 'Loading video...';
         await player.load(streamUrl);
         
-        // Hide overlay once video is ready
         overlay.classList.add('hidden');
 
       } catch (err) {
