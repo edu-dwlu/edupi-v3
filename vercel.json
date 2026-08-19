@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/watch/:id1/:id2/:id3",
-      "destination": "/index.html?id1=:id1&id2=:id2&id3=:id3"
+      "destination": "/index.html"
     },
     {
       "source": "/api/stream/:id1/:id2/:id3",
-      "destination": "/api/stream?id1=:id1&id2=:id2&id3=:id3"
+      "destination": "https://play.edustream.qzz.io/api/public/s/y124xkpxpvrg6t96f2yq0qxly26h574lr648rrd7njsf36pfyzy99ysvq38z2g38rndb/api/v2/get-signedurl/:id1/:id2/:id3"
     }
   ]
 }
