@@ -75,8 +75,7 @@
   </div>
 
   <script>
-    // 1. Extract IDs directly from the URL path (e.g., /watch/id1/id2/id3)
-    // This fixes the Vercel static routing issue by reading the actual address bar
+    // Extract IDs directly from the URL path
     const pathMatch = window.location.pathname.match(/\/watch\/([^\/]+)\/([^\/]+)\/([^\/]+)/);
     
     let id1, id2, id3;
@@ -86,7 +85,6 @@
       id2 = pathMatch[2];
       id3 = pathMatch[3];
     } else {
-      // Fallback just in case standard query parameters are used directly
       const urlParams = new URLSearchParams(window.location.search);
       id1 = urlParams.get('id1');
       id2 = urlParams.get('id2');
@@ -120,7 +118,6 @@
       const video = document.getElementById('video');
       const player = new shaka.Player(video);
 
-      // Listen for player errors
       player.addEventListener('error', (event) => {
         console.error('Shaka Player Error:', event.detail);
         showError(`Playback error: ${event.detail.message || 'Unable to decode stream'}`);
@@ -129,25 +126,34 @@
       try {
         statusText.textContent = 'Fetching stream keys...';
         
-        // Call your Vercel serverless function to get the secure CDN link
+        // Fetch the JSON via our Vercel Edge Proxy
         const response = await fetch(`/api/stream/${id1}/${id2}/${id3}`);
         
         if (!response.ok) {
           throw new Error(`API returned HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        const jsonResponse = await response.json();
 
-        // Dynamically extract the manifest URL and DRM credentials
-        const streamUrl = data.url || data.stream_url || data.file || data.manifest;
-        const kid = data.kid || data.key_id || (data.keys && data.keys[0]?.kid);
-        const key = data.key || data.key_value || (data.keys && data.keys[0]?.key);
+        // --- NEW JSON PARSING LOGIC ---
+        // Look inside the nested "data" object returned by the API
+        const apiData = jsonResponse.data;
+
+        if (!apiData) {
+          throw new Error('Unexpected API response format: Missing "data" object.');
+        }
+
+        // Prioritize DASH (.mpd) for DRM, fallback to HLS (.m3u8)
+        const streamUrl = apiData.manifest_url || apiData.hls_url;
+        const kid = apiData.kid;
+        const key = apiData.key;
+        // ------------------------------
 
         if (!streamUrl) {
           throw new Error('No stream URL provided in the API response.');
         }
 
-        // Configure ClearKey DRM if keys exist
+        // Configure ClearKey DRM
         if (kid && key) {
           player.configure({
             drm: {
@@ -170,7 +176,6 @@
       }
     }
 
-    // Wait for the Shaka UI to load before running our script
     document.addEventListener('shaka-ui-loaded', initPlayer);
   </script>
 </body>
