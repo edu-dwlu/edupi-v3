@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/watch/:id1/:id2/:id3",
+      "destination": "/index.html?id1=:id1&id2=:id2&id3=:id3"
+    },
+    {
+      "source": "/api/stream/:id1/:id2/:id3",
+      "destination": "/api/stream?id1=:id1&id2=:id2&id3=:id3"
+    }
+  ]
+}
