@@ -118,18 +118,7 @@
       const video = document.getElementById('video');
       const player = new shaka.Player(video);
 
-      // --- CORS / NETWORK REQUEST BYPASS FILTER ---
-      // This hooks into Shaka's networking engine to inject headers into every video chunk request
-      const networkingEngine = player.getNetworkingEngine();
-      if (networkingEngine) {
-        networkingEngine.registerRequestFilter(function(type, request) {
-          // Force proper headers on media segments and manifests to bypass CORS blocks
-          request.headers['Origin'] = 'https://play.edustream.qzz.io';
-          request.headers['Referer'] = 'https://play.edustream.qzz.io/';
-        });
-      }
-      // -------------------------------------------
-
+      // Listen for errors
       player.addEventListener('error', (event) => {
         console.error('Shaka Player Error:', event.detail);
         showError(`Playback error Code ${event.detail.code}: ${event.detail.message || 'Network request failed'}`);
